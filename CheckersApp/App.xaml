@@ -6,5 +6,6 @@
     <Application.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <local:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
+        <local:CellColorConverter x:Key="CellColorConverter"/>
     </Application.Resources>
 </Application>

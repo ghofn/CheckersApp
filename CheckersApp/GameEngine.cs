@@ -14,6 +14,7 @@ namespace CheckersApp
         private GameMode _gameMode;
         private AIDifficulty _aiDifficulty;
         private Random _random;
+        private Move _lastMove;
 
         public bool IsGameOver { get; private set; }
         public string Winner { get; private set; }
@@ -99,7 +100,7 @@ namespace CheckersApp
 
         private void SelectPiece(int row, int col)
         {
-            ClearHighlights();
+            ClearMoveHighlights(); // Используем новую очистку вместо ClearHighlights
             _selectedPiece = new Position(row, col);
             _board[row, col].Color = Colors.LightBlue;
 
@@ -140,6 +141,9 @@ namespace CheckersApp
 
         private void ExecuteMove(Move move)
         {
+            // Очищаем подсветки перед выполнением хода
+            ClearMoveHighlights();
+
             var fromCell = _board[move.From.Row, move.From.Column];
             var toCell = _board[move.To.Row, move.To.Column];
 
@@ -159,6 +163,17 @@ namespace CheckersApp
             }
 
             CheckForPromotion(toCell);
+
+            // Обновляем подсветку последнего хода
+            if (_lastMove != null)
+            {
+                _board[_lastMove.From.Row, _lastMove.From.Column].IsLastMove = false;
+                _board[_lastMove.To.Row, _lastMove.To.Column].IsLastMove = false;
+            }
+
+            _lastMove = move;
+            _board[move.From.Row, move.From.Column].IsLastMove = true;
+            _board[move.To.Row, move.To.Column].IsLastMove = true;
         }
 
         public void MakeAIMove()
@@ -210,7 +225,7 @@ namespace CheckersApp
             CheckGameOver();
         }
 
-        private List<Move> GetAllPossibleMovesForCurrentPlayer()
+        public List<Move> GetAllPossibleMovesForCurrentPlayer()
         {
             var allMoves = new List<Move>();
             var currentColor = GetCurrentPlayerColor();
@@ -497,6 +512,7 @@ namespace CheckersApp
                 for (int col = 0; col < 8; col++)
                 {
                     _board[row, col].Color = (row + col) % 2 == 0 ? Colors.LightGray : Colors.DarkGray;
+                    _board[row, col].IsHighlighted = false;
                 }
             }
         }
@@ -736,13 +752,31 @@ namespace CheckersApp
                 }
             }
         }
-    }
-
-
-    public enum AIDifficulty
-    {
-        Easy,
-        Medium,
-        Hard
+        public void ClearHints() 
+        {
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    _board[row, col].IsHighlighted = false;
+                }
+            }
+        }
+        public void ClearMoveHighlights()
+        {
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    // Сбрасываем только цвета ходов, но сохраняем последний ход
+                    if (_board[row, col].Color == Colors.LightBlue ||
+                        _board[row, col].Color == Colors.Orange ||
+                        _board[row, col].Color == Colors.LightGreen)
+                    {
+                        _board[row, col].Color = (row + col) % 2 == 0 ? Colors.LightGray : Colors.DarkGray;
+                    }
+                }
+            }
+        }
     }
 }

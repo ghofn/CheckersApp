@@ -37,4 +37,10 @@
         TwoPlayers,
         PlayerVsAI
     }
+    public enum AIDifficulty
+    {
+        Easy,
+        Medium,
+        Hard
+    }
 }

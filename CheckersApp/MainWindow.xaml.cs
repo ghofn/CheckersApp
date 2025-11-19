@@ -12,7 +12,6 @@ namespace CheckersApp
         private GameEngine _gameEngine;
         private GameMode _gameMode;
 
-        // Обновленный конструктор с параметром режима
         public MainWindow(GameMode gameMode = GameMode.TwoPlayers, AIDifficulty aiDifficulty = AIDifficulty.Medium)
         {
             InitializeComponent();
@@ -29,6 +28,7 @@ namespace CheckersApp
             UpdateBoard();
             UpdateStatus();
         }
+
         private void StartNewGame()
         {
             _gameEngine = new GameEngine(_gameMode);
@@ -44,9 +44,6 @@ namespace CheckersApp
         private void UpdateStatus()
         {
             StatusText.Text = _gameEngine.GetGameStatus();
-
-            // Добавим отладочную информацию
-            DebugText.Text = $"Режим: {_gameMode} | Игрок: {_gameEngine.CurrentPlayer}";
 
             if (_gameEngine.IsGameOver)
             {
@@ -67,7 +64,6 @@ namespace CheckersApp
 
         private async void Border_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            // Блокируем ввод во время хода ИИ
             if (_gameMode == GameMode.PlayerVsAI && _gameEngine.CurrentPlayer == PieceColor.Black)
                 return;
 
@@ -89,7 +85,6 @@ namespace CheckersApp
                 }
                 else if (_gameMode == GameMode.PlayerVsAI && _gameEngine.CurrentPlayer == PieceColor.Black)
                 {
-                    // Ход ИИ с небольшой задержкой для естественности
                     await Task.Delay(500);
                     MakeAIMove();
                 }
@@ -128,6 +123,41 @@ namespace CheckersApp
 
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
+        }
+        private void HintButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_gameEngine.IsGameOver ||
+                (_gameMode == GameMode.PlayerVsAI && _gameEngine.CurrentPlayer == PieceColor.Black))
+                return;
+
+            ShowPossibleMovesHint();
+        }
+
+        private async void ShowPossibleMovesHint()
+        {
+            var allMoves = _gameEngine.GetAllPossibleMovesForCurrentPlayer();
+
+            // Подсвечиваем все возможные ходы
+            foreach (var move in allMoves)
+            {
+                // Подсвечиваем конечные позиции возможных ходов
+                var cells = _gameEngine.GetBoardCells();
+                foreach (var cell in cells)
+                {
+                    if (cell.Row == move.To.Row && cell.Column == move.To.Column)
+                    {
+                        cell.IsHighlighted = true;
+                    }
+                }
+            }
+
+            UpdateBoard();
+
+            // Через 3 секунды убираем подсказку
+            await Task.Delay(3000);
+
+            _gameEngine.ClearHints();
+            UpdateBoard();
         }
     }
 }

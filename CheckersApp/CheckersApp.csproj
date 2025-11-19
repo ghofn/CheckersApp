@@ -68,8 +68,10 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="BoardCell.cs" />
+    <Compile Include="CellColorConverter.cs" />
     <Compile Include="ColorToBrushConverter.cs" />
     <Compile Include="GameEngine.cs" />
+    <Compile Include="HighlightToBrushConverter.cs" />
     <Compile Include="MainMenuWindow.xaml.cs">
       <DependentUpon>MainMenuWindow.xaml</DependentUpon>
     </Compile>

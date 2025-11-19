@@ -11,5 +11,7 @@ namespace CheckersApp
         public Color PieceColor { get; set; }
         public Color PieceBorderColor { get; set; }
         public bool IsKing { get; set; }
+        public bool IsHighlighted { get; set; }
+        public bool IsLastMove { get; set; }
     }
 }
