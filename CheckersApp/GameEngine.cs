@@ -12,12 +12,12 @@ namespace CheckersApp
         private Position _selectedPiece;
         private List<Move> _possibleMoves;
         private GameMode _gameMode;
+        private AIDifficulty _aiDifficulty;
         private Random _random;
-        private AIDifficulty _aiDifficulty = AIDifficulty.Medium;
-        public PieceColor CurrentPlayer => _currentPlayer;
-
 
         public bool IsGameOver { get; private set; }
+        public string Winner { get; private set; }
+        public PieceColor CurrentPlayer => _currentPlayer;
 
         public GameEngine(GameMode gameMode = GameMode.TwoPlayers, AIDifficulty aiDifficulty = AIDifficulty.Medium)
         {
@@ -29,32 +29,7 @@ namespace CheckersApp
             _selectedPiece = null;
             _possibleMoves = new List<Move>();
             IsGameOver = false;
-        }
-
-        private void TryMakeMove(int toRow, int toCol)
-        {
-            var move = _possibleMoves.FirstOrDefault(m =>
-                m.To.Row == toRow && m.To.Column == toCol);
-
-            if (move != null)
-            {
-                ExecuteMove(move);
-
-                if (move.IsCapture)
-                {
-                    var canContinueCapture = CheckAdditionalCaptures(move.To.Row, move.To.Column);
-                    if (canContinueCapture)
-                    {
-                        SelectPiece(move.To.Row, move.To.Column);
-                        return;
-                    }
-                }
-
-                SwitchPlayer();
-                ClearHighlights();
-                _selectedPiece = null;
-                CheckGameOver();  // ← ЭТУ СТРОЧКУ ДОБАВЬ
-            }
+            Winner = "";
         }
 
         private void InitializeBoard()
@@ -74,17 +49,14 @@ namespace CheckersApp
                         IsKing = false
                     };
 
-                    // Расставляем шашки только на темных клетках
                     if ((row + col) % 2 == 1)
                     {
-                        // Черные шашки (верхние 3 ряда)
                         if (row < 3)
                         {
                             cell.PieceColor = Colors.Black;
                             cell.PieceBorderColor = Colors.DarkSlateGray;
                             cell.HasPiece = true;
                         }
-                        // Белые шашки (нижние 3 ряда)
                         else if (row > 4)
                         {
                             cell.PieceColor = Colors.White;
@@ -115,12 +87,10 @@ namespace CheckersApp
 
             var cell = _board[row, col];
 
-            // Если кликнули на шашку текущего игрока
             if (cell.HasPiece && cell.PieceColor == GetCurrentPlayerColor())
             {
                 SelectPiece(row, col);
             }
-            // Если кликнули на пустую клетку и есть выбранная шашка
             else if (_selectedPiece != null && !cell.HasPiece)
             {
                 TryMakeMove(row, col);
@@ -135,7 +105,6 @@ namespace CheckersApp
 
             _possibleMoves = CalculatePossibleMoves(row, col);
 
-            // Подсветка возможных ходов
             foreach (var move in _possibleMoves)
             {
                 _board[move.To.Row, move.To.Column].Color =
@@ -143,9 +112,34 @@ namespace CheckersApp
             }
         }
 
+        private void TryMakeMove(int toRow, int toCol)
+        {
+            var move = _possibleMoves.FirstOrDefault(m =>
+                m.To.Row == toRow && m.To.Column == toCol);
+
+            if (move != null)
+            {
+                ExecuteMove(move);
+
+                if (move.IsCapture)
+                {
+                    var canContinueCapture = CheckAdditionalCaptures(move.To.Row, move.To.Column);
+                    if (canContinueCapture)
+                    {
+                        SelectPiece(move.To.Row, move.To.Column);
+                        return;
+                    }
+                }
+
+                SwitchPlayer();
+                ClearHighlights();
+                _selectedPiece = null;
+                CheckGameOver();
+            }
+        }
+
         private void ExecuteMove(Move move)
         {
-            // Перемещаем шашку
             var fromCell = _board[move.From.Row, move.From.Column];
             var toCell = _board[move.To.Row, move.To.Column];
 
@@ -157,7 +151,6 @@ namespace CheckersApp
             fromCell.HasPiece = false;
             fromCell.IsKing = false;
 
-            // Убираем сбитую шашку (если есть)
             if (move.IsCapture && move.CapturedPiece != null)
             {
                 var capturedCell = _board[move.CapturedPiece.Row, move.CapturedPiece.Column];
@@ -165,41 +158,115 @@ namespace CheckersApp
                 capturedCell.IsKing = false;
             }
 
-            // Проверка на превращение в дамку
             CheckForPromotion(toCell);
         }
-        public string GetGameStatus()
+
+        public void MakeAIMove()
         {
-            if (IsGameOver)
+            if (_gameMode != GameMode.PlayerVsAI || _currentPlayer != PieceColor.Black)
+                return;
+
+            var allMoves = GetAllPossibleMovesForCurrentPlayer();
+
+            if (allMoves.Count == 0)
             {
-                string winner = _currentPlayer == PieceColor.White ? "черные" : "белые";
-                return $"Игра окончена! Победили {winner}!";
+                IsGameOver = true;
+                return;
             }
+
+            Move bestMove = null;
+
+            switch (_aiDifficulty)
+            {
+                case AIDifficulty.Easy:
+                    bestMove = allMoves[_random.Next(allMoves.Count)];
+                    break;
+
+                case AIDifficulty.Medium:
+                    bestMove = FindBestMove(3);
+                    break;
+
+                case AIDifficulty.Hard:
+                    bestMove = FindBestMove(5);
+                    break;
+            }
+
+            if (bestMove == null)
+                bestMove = allMoves[_random.Next(allMoves.Count)];
+
+            ExecuteMove(bestMove);
+
+            if (bestMove.IsCapture)
+            {
+                var canContinueCapture = CheckAdditionalCaptures(bestMove.To.Row, bestMove.To.Column);
+                if (canContinueCapture)
+                {
+                    MakeAIMove();
+                    return;
+                }
+            }
+
+            SwitchPlayer();
+            CheckGameOver();
+        }
+
+        private List<Move> GetAllPossibleMovesForCurrentPlayer()
+        {
+            var allMoves = new List<Move>();
+            var currentColor = GetCurrentPlayerColor();
 
             var forcedCaptures = GetAllPossibleCapturesForCurrentPlayer();
             if (forcedCaptures.Count > 0)
             {
-                return $"Ход: {(_currentPlayer == PieceColor.White ? "белые" : "черные")} - ОБЯЗАН БИТЬ!";
+                return forcedCaptures;
             }
 
-            return $"Ход: {(_currentPlayer == PieceColor.White ? "белые" : "черные")}";
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    if (_board[row, col].HasPiece && _board[row, col].PieceColor == currentColor)
+                    {
+                        var moves = _board[row, col].IsKing ?
+                            CalculateKingMoves(row, col) :
+                            CalculateNormalMoves(row, col);
+                        allMoves.AddRange(moves);
+                    }
+                }
+            }
+
+            return allMoves;
         }
+
+        private List<Move> GetAllPossibleMovesForColor(Color color)
+        {
+            var moves = new List<Move>();
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    if (_board[row, col].HasPiece && _board[row, col].PieceColor == color)
+                    {
+                        moves.AddRange(CalculatePossibleMoves(row, col));
+                    }
+                }
+            }
+            return moves;
+        }
+
         private List<Move> CalculatePossibleMoves(int row, int col)
         {
             var cell = _board[row, col];
             var allCaptures = new List<Move>();
 
-            // Сначала проверяем все возможные взятия для текущего игрока
             var forcedCaptures = GetAllPossibleCapturesForCurrentPlayer();
 
-            // Если есть обязательные взятия, возвращаем только взятия для этой шашки
             if (forcedCaptures.Count > 0)
             {
                 return forcedCaptures.Where(m =>
                     m.From.Row == row && m.From.Column == col).ToList();
             }
 
-            // Если взятий нет, возвращаем обычные ходы
             if (cell.IsKing)
             {
                 return CalculateKingMoves(row, col);
@@ -267,12 +334,11 @@ namespace CheckersApp
                 int currentRow = row + dir.Row;
                 int currentCol = col + dir.Column;
 
-                // Двигаемся по диагонали, пока не упремся в край доски или другую шашку
                 while (IsValidPosition(currentRow, currentCol))
                 {
                     if (_board[currentRow, currentCol].HasPiece)
                     {
-                        break; // Упёрлись в шашку - дальше нельзя
+                        break;
                     }
 
                     moves.Add(new Move(
@@ -295,56 +361,20 @@ namespace CheckersApp
 
             if (cell.IsKing)
             {
-                // Дамка может бить в любом направлении
                 captures.AddRange(CalculateKingCaptures(row, col));
             }
             else
             {
-                // Обычная шашка может бить ТОЛЬКО ВПЕРЕД
                 captures.AddRange(CalculateNormalCaptures(row, col));
             }
 
             return captures;
-        }
-        private void CheckGameOver()
-        {
-            bool hasPieces = false;
-            bool hasValidMoves = false;
-            Color currentColor = GetCurrentPlayerColor();
-
-            // Проверяем, есть ли у текущего игрока шашки
-            for (int row = 0; row < 8; row++)
-            {
-                for (int col = 0; col < 8; col++)
-                {
-                    if (_board[row, col].HasPiece && _board[row, col].PieceColor == currentColor)
-                    {
-                        hasPieces = true;
-                        // Проверяем, есть ли у этой шашки возможные ходы
-                        var moves = CalculatePossibleMoves(row, col);
-                        if (moves.Count > 0)
-                        {
-                            hasValidMoves = true;
-                            break;
-                        }
-                    }
-                }
-                if (hasValidMoves) break;
-            }
-
-            // Если нет шашек или нет возможных ходов - игра окончена
-            if (!hasPieces || !hasValidMoves)
-            {
-                IsGameOver = true;
-            }
         }
 
         private List<Move> CalculateNormalCaptures(int row, int col)
         {
             var captures = new List<Move>();
             var cell = _board[row, col];
-
-            // Только направления ВПЕРЕД для обычных шашек
             var directions = GetForwardDirections(cell.PieceColor);
 
             foreach (var dir in directions)
@@ -377,8 +407,6 @@ namespace CheckersApp
         {
             var captures = new List<Move>();
             var cell = _board[row, col];
-
-            // Дамка может бить во всех направлениях
             var directions = new List<Position>
             {
                 new Position(-1, -1), new Position(-1, 1),
@@ -411,259 +439,10 @@ namespace CheckersApp
             return captures;
         }
 
-
-        private int EvaluatePosition()
-        {
-            int score = 0;
-            int blackPieces = 0;
-            int whitePieces = 0;
-            int blackKings = 0;
-            int whiteKings = 0;
-
-            for (int row = 0; row < 8; row++)
-            {
-                for (int col = 0; col < 8; col++)
-                {
-                    var cell = _board[row, col];
-                    if (cell.HasPiece)
-                    {
-                        int positionScore = 0;
-
-                        if (cell.PieceColor == Colors.Black)
-                        {
-                            blackPieces++;
-                            if (cell.IsKing)
-                            {
-                                blackKings++;
-                                positionScore += 35; // Дамки очень ценны
-
-                                // Дамки в центре и на флангах
-                                if (col >= 2 && col <= 5) positionScore += 3;
-                                if (row >= 2 && row <= 5) positionScore += 2;
-                            }
-                            else
-                            {
-                                positionScore += 10;
-                                // Сильно поощряем продвижение к дамке
-                                positionScore += (7 - row) * 3;
-                                // Защищенные пешки (рядом с краем)
-                                if (col == 0 || col == 7) positionScore += 2;
-                                // Пешки в центре
-                                if (col >= 3 && col <= 4) positionScore += 1;
-                            }
-
-                            score += positionScore;
-                        }
-                        else // Белые
-                        {
-                            whitePieces++;
-                            if (cell.IsKing)
-                            {
-                                whiteKings++;
-                                positionScore += 35;
-                                if (col >= 2 && col <= 5) positionScore += 3;
-                                if (row >= 2 && row <= 5) positionScore += 2;
-                            }
-                            else
-                            {
-                                positionScore += 10;
-                                positionScore += row * 3; // Для белых чем ниже, тем лучше
-                                if (col == 0 || col == 7) positionScore += 2;
-                                if (col >= 3 && col <= 4) positionScore += 1;
-                            }
-
-                            score -= positionScore;
-                        }
-                    }
-                }
-            }
-
-            // Бонус за мобильность
-            var blackMoves = GetAllPossibleMovesForColor(Colors.Black);
-            var whiteMoves = GetAllPossibleMovesForColor(Colors.White);
-
-            score += blackMoves.Count * 3;
-            score -= whiteMoves.Count * 3;
-
-            // Сильный бонус за материальное преимущество
-            int materialDiff = (blackPieces * 10 + blackKings * 25) - (whitePieces * 10 + whiteKings * 25);
-            score += materialDiff;
-
-            // В эндшпиле короли становятся еще важнее
-            int totalPieces = blackPieces + whitePieces;
-            if (totalPieces < 6)
-            {
-                score += blackKings * 15;
-                score -= whiteKings * 15;
-
-                // В эндшпиле поощряем централизацию дамок
-                for (int row = 0; row < 8; row++)
-                {
-                    for (int col = 0; col < 8; col++)
-                    {
-                        var cell = _board[row, col];
-                        if (cell.HasPiece && cell.IsKing)
-                        {
-                            int centerBonus = 0;
-                            if (row >= 3 && row <= 4 && col >= 3 && col <= 4) centerBonus = 5;
-                            else if (row >= 2 && row <= 5 && col >= 2 && col <= 5) centerBonus = 3;
-
-                            if (cell.PieceColor == Colors.Black)
-                                score += centerBonus;
-                            else
-                                score -= centerBonus;
-                        }
-                    }
-                }
-            }
-
-            return score;
-        }
-
-        // Вспомогательный метод для получения ходов по цвету
-        private List<Move> GetAllPossibleMovesForColor(Color color)
-        {
-            var moves = new List<Move>();
-            for (int row = 0; row < 8; row++)
-            {
-                for (int col = 0; col < 8; col++)
-                {
-                    if (_board[row, col].HasPiece && _board[row, col].PieceColor == color)
-                    {
-                        moves.AddRange(CalculatePossibleMoves(row, col));
-                    }
-                }
-            }
-            return moves;
-        }
-
-
-        private int Minimax(int depth, int alpha, int beta, bool maximizingPlayer)
-        {
-            // Если достигнута максимальная глубина или игра окончена, возвращаем оценку
-            if (depth == 0 || IsGameOver)
-            {
-                return EvaluatePosition();
-            }
-
-            var moves = GetAllPossibleMovesForCurrentPlayer();
-
-            if (maximizingPlayer) // ИИ (черные) - максимизируем оценку
-            {
-                int maxEval = int.MinValue;
-
-                foreach (var move in moves)
-                {
-                    // Сохраняем состояние до хода
-                    var savedBoard = SaveBoardState();
-
-                    // Делаем ход
-                    ExecuteMove(move);
-
-                    // Рекурсивно оцениваем позицию
-                    int eval = Minimax(depth - 1, alpha, beta, false);
-
-                    // Возвращаем состояние
-                    RestoreBoardState(savedBoard);
-
-                    maxEval = Math.Max(maxEval, eval);
-                    alpha = Math.Max(alpha, eval);
-                    if (beta <= alpha)
-                        break; // Альфа-бета отсечение
-                }
-
-                return maxEval;
-            }
-            else // Игрок (белые) - минимизируем оценку
-            {
-                int minEval = int.MaxValue;
-
-                foreach (var move in moves)
-                {
-                    // Сохраняем состояние до хода
-                    var savedBoard = SaveBoardState();
-
-                    // Делаем ход
-                    ExecuteMove(move);
-
-                    // Рекурсивно оцениваем позицию
-                    int eval = Minimax(depth - 1, alpha, beta, true);
-
-                    // Возвращаем состояние
-                    RestoreBoardState(savedBoard);
-
-                    minEval = Math.Min(minEval, eval);
-                    beta = Math.Min(beta, eval);
-                    if (beta <= alpha)
-                        break; // Альфа-бета отсечение
-                }
-
-                return minEval;
-            }
-        }
-
-        // Сохраняем состояние доски
-        private BoardCell[,] SaveBoardState()
-        {
-            var savedBoard = new BoardCell[8, 8];
-
-            for (int row = 0; row < 8; row++)
-            {
-                for (int col = 0; col < 8; col++)
-                {
-                    var original = _board[row, col];
-                    savedBoard[row, col] = new BoardCell
-                    {
-                        Row = original.Row,
-                        Column = original.Column,
-                        Color = original.Color,
-                        HasPiece = original.HasPiece,
-                        PieceColor = original.PieceColor,
-                        PieceBorderColor = original.PieceBorderColor,
-                        IsKing = original.IsKing
-                    };
-                }
-            }
-
-            return savedBoard;
-        }
-
-        // Восстанавливаем состояние доски
-        private void RestoreBoardState(BoardCell[,] savedBoard)
-        {
-            for (int row = 0; row < 8; row++)
-            {
-                for (int col = 0; col < 8; col++)
-                {
-                    var saved = savedBoard[row, col];
-                    _board[row, col] = new BoardCell
-                    {
-                        Row = saved.Row,
-                        Column = saved.Column,
-                        Color = saved.Color,
-                        HasPiece = saved.HasPiece,
-                        PieceColor = saved.PieceColor,
-                        PieceBorderColor = saved.PieceBorderColor,
-                        IsKing = saved.IsKing
-                    };
-                }
-            }
-        }
-
-
-
-
-
-
-
-
-
         private List<Position> GetForwardDirections(Color pieceColor)
         {
-            // Обычные шашки бьют ТОЛЬКО ВПЕРЕД
             if (pieceColor == Colors.White)
             {
-                // Белые бьют ВВЕРХ (к меньшим номерам строк)
                 return new List<Position>
                 {
                     new Position(-1, -1),
@@ -672,7 +451,6 @@ namespace CheckersApp
             }
             else
             {
-                // Черные бьют ВНИЗ (к большим номерам строк)
                 return new List<Position>
                 {
                     new Position(1, -1),
@@ -688,14 +466,12 @@ namespace CheckersApp
 
             if (cell.IsKing || cell.PieceColor == Colors.White)
             {
-                // Белые и дамки ходят вверх
                 directions.Add(new Position(-1, -1));
                 directions.Add(new Position(-1, 1));
             }
 
             if (cell.IsKing || cell.PieceColor == Colors.Black)
             {
-                // Черные и дамки ходят вниз
                 directions.Add(new Position(1, -1));
                 directions.Add(new Position(1, 1));
             }
@@ -735,6 +511,37 @@ namespace CheckersApp
             }
         }
 
+        private void CheckGameOver()
+        {
+            bool hasPieces = false;
+            bool hasValidMoves = false;
+            Color currentColor = GetCurrentPlayerColor();
+
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    if (_board[row, col].HasPiece && _board[row, col].PieceColor == currentColor)
+                    {
+                        hasPieces = true;
+                        var moves = CalculatePossibleMoves(row, col);
+                        if (moves.Count > 0)
+                        {
+                            hasValidMoves = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasValidMoves) break;
+            }
+
+            if (!hasPieces || !hasValidMoves)
+            {
+                IsGameOver = true;
+                Winner = _currentPlayer == PieceColor.White ? "черные" : "белые";
+            }
+        }
+
         private void SwitchPlayer()
         {
             _currentPlayer = _currentPlayer == PieceColor.White ? PieceColor.Black : PieceColor.White;
@@ -745,160 +552,83 @@ namespace CheckersApp
             return _currentPlayer == PieceColor.White ? Colors.White : Colors.Black;
         }
 
-        public void MakeAIMove()
+        public string GetGameStatus()
         {
-            if (_gameMode != GameMode.PlayerVsAI || _currentPlayer != PieceColor.Black)
-                return;
-
-            var allMoves = GetAllPossibleMovesForCurrentPlayer();
-
-            if (allMoves.Count == 0)
+            if (IsGameOver)
             {
-                IsGameOver = true;
-                return;
+                return $"Игра окончена! Победили {Winner}!";
             }
 
-            Move bestMove = null;
-
-            // Разная логика в зависимости от уровня сложности
-            switch (_aiDifficulty)
-            {
-                case AIDifficulty.Easy:
-                    // Случайные ходы (как было)
-                    bestMove = allMoves[_random.Next(allMoves.Count)];
-                    break;
-
-                case AIDifficulty.Medium:
-                    bestMove = FindBestMove(4); // Увеличили до 4
-                    break;
-
-                case AIDifficulty.Hard:
-                    bestMove = FindBestMove(6); // Увеличили до 6
-                    break;
-            }
-
-            // Если не нашли лучший ход, берем случайный
-            if (bestMove == null)
-                bestMove = allMoves[_random.Next(allMoves.Count)];
-
-            // Выполняем ход
-            ExecuteMove(bestMove);
-
-            // Проверяем продолжение взятия
-            if (bestMove.IsCapture)
-            {
-                var canContinueCapture = CheckAdditionalCaptures(bestMove.To.Row, bestMove.To.Column);
-                if (canContinueCapture)
-                {
-                    MakeAIMove();
-                    return;
-                }
-            }
-
-            SwitchPlayer();
-        }
-
-        public enum AIDifficulty
-        {
-            Easy,    // Случайные ходы
-            Medium,  // Минимакс с глубиной 2
-            Hard     // Минимакс с глубиной 4
-        }
-
-        // НОВЫЙ МЕТОД: Получить все возможные ходы для текущего игрока
-        private List<Move> GetAllPossibleMovesForCurrentPlayer()
-        {
-            var allMoves = new List<Move>();
-            var currentColor = GetCurrentPlayerColor();
-
-            // Сначала проверяем обязательные взятия
             var forcedCaptures = GetAllPossibleCapturesForCurrentPlayer();
             if (forcedCaptures.Count > 0)
             {
-                return forcedCaptures;
+                return $"Ход: {(_currentPlayer == PieceColor.White ? "белые" : "черные")} - ОБЯЗАН БИТЬ!";
             }
 
-            // Если взятий нет, собираем все обычные ходы
+            return $"Ход: {(_currentPlayer == PieceColor.White ? "белые" : "черные")}";
+        }
+
+        // Методы для ИИ
+        private int EvaluatePosition()
+        {
+            int score = 0;
+            int blackPieces = 0;
+            int whitePieces = 0;
+            int blackKings = 0;
+            int whiteKings = 0;
+
             for (int row = 0; row < 8; row++)
             {
                 for (int col = 0; col < 8; col++)
                 {
-                    if (_board[row, col].HasPiece && _board[row, col].PieceColor == currentColor)
+                    var cell = _board[row, col];
+                    if (cell.HasPiece)
                     {
-                        var moves = _board[row, col].IsKing ?
-                            CalculateKingMoves(row, col) :
-                            CalculateNormalMoves(row, col);
-                        allMoves.AddRange(moves);
+                        int pieceValue = cell.IsKing ? 30 : 10;
+
+                        if (cell.PieceColor == Colors.Black)
+                        {
+                            blackPieces++;
+                            if (cell.IsKing) blackKings++;
+                            score += pieceValue;
+                            if (!cell.IsKing) score += (7 - row) * 2;
+                        }
+                        else
+                        {
+                            whitePieces++;
+                            if (cell.IsKing) whiteKings++;
+                            score -= pieceValue;
+                            if (!cell.IsKing) score -= row * 2;
+                        }
                     }
                 }
             }
 
-            return allMoves;
+            var blackMoves = GetAllPossibleMovesForColor(Colors.Black);
+            var whiteMoves = GetAllPossibleMovesForColor(Colors.White);
+
+            score += blackMoves.Count * 2;
+            score -= whiteMoves.Count * 2;
+
+            int materialDiff = (blackPieces + blackKings * 2) - (whitePieces + whiteKings * 2);
+            score += materialDiff * 5;
+
+            return score;
         }
 
         private Move FindBestMove(int depth)
         {
             var allMoves = GetAllPossibleMovesForCurrentPlayer();
-
-            // Сортируем ходы: сначала взятия, потом остальные
-            allMoves = allMoves.OrderByDescending(m => m.IsCapture).ThenBy(m => _random.Next()).ToList();
-
             Move bestMove = null;
             int bestEvaluation = int.MinValue;
 
             foreach (var move in allMoves)
             {
                 var savedBoard = SaveBoardState();
-                var savedPlayer = _currentPlayer;
-                var savedGameOver = IsGameOver;
 
                 ExecuteMove(move);
-
-                // Если ход со взятием и можно продолжать, делаем это
-                if (move.IsCapture)
-                {
-                    var canContinueCapture = CheckAdditionalCaptures(move.To.Row, move.To.Column);
-                    if (canContinueCapture)
-                    {
-                        // Рекурсивно продолжаем взятие
-                        var continuationMoves = GetAllPossibleMovesForCurrentPlayer();
-                        if (continuationMoves.Count > 0)
-                        {
-                            var bestContinuation = FindBestMove(depth);
-                            if (bestContinuation != null)
-                            {
-                                // Восстанавливаем состояние и применяем полную последовательность
-                                RestoreBoardState(savedBoard);
-                                _currentPlayer = savedPlayer;
-                                IsGameOver = savedGameOver;
-
-                                ExecuteMove(move);
-                                ExecuteMove(bestContinuation);
-
-                                // ИСПРАВЛЕНИЕ: переименовал переменную
-                                int continuationEvaluation = Minimax(depth - 1, int.MinValue, int.MaxValue, false);
-
-                                RestoreBoardState(savedBoard);
-                                _currentPlayer = savedPlayer;
-                                IsGameOver = savedGameOver;
-
-                                if (continuationEvaluation > bestEvaluation)
-                                {
-                                    bestEvaluation = continuationEvaluation;
-                                    bestMove = move;
-                                }
-                                continue;
-                            }
-                        }
-                    }
-                }
-
-                // ИСПРАВЛЕНИЕ: это основная переменная evaluation
                 int moveEvaluation = Minimax(depth - 1, int.MinValue, int.MaxValue, false);
-
                 RestoreBoardState(savedBoard);
-                _currentPlayer = savedPlayer;
-                IsGameOver = savedGameOver;
 
                 if (moveEvaluation > bestEvaluation)
                 {
@@ -909,5 +639,110 @@ namespace CheckersApp
 
             return bestMove;
         }
+
+        private int Minimax(int depth, int alpha, int beta, bool maximizingPlayer)
+        {
+            if (depth == 0 || IsGameOver)
+            {
+                return EvaluatePosition();
+            }
+
+            var moves = GetAllPossibleMovesForCurrentPlayer();
+
+            if (maximizingPlayer)
+            {
+                int maxEval = int.MinValue;
+
+                foreach (var move in moves)
+                {
+                    var savedBoard = SaveBoardState();
+
+                    ExecuteMove(move);
+                    int eval = Minimax(depth - 1, alpha, beta, false);
+                    RestoreBoardState(savedBoard);
+
+                    maxEval = Math.Max(maxEval, eval);
+                    alpha = Math.Max(alpha, eval);
+                    if (beta <= alpha)
+                        break;
+                }
+
+                return maxEval;
+            }
+            else
+            {
+                int minEval = int.MaxValue;
+
+                foreach (var move in moves)
+                {
+                    var savedBoard = SaveBoardState();
+
+                    ExecuteMove(move);
+                    int eval = Minimax(depth - 1, alpha, beta, true);
+                    RestoreBoardState(savedBoard);
+
+                    minEval = Math.Min(minEval, eval);
+                    beta = Math.Min(beta, eval);
+                    if (beta <= alpha)
+                        break;
+                }
+
+                return minEval;
+            }
+        }
+
+        private BoardCell[,] SaveBoardState()
+        {
+            var savedBoard = new BoardCell[8, 8];
+
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    var original = _board[row, col];
+                    savedBoard[row, col] = new BoardCell
+                    {
+                        Row = original.Row,
+                        Column = original.Column,
+                        Color = original.Color,
+                        HasPiece = original.HasPiece,
+                        PieceColor = original.PieceColor,
+                        PieceBorderColor = original.PieceBorderColor,
+                        IsKing = original.IsKing
+                    };
+                }
+            }
+
+            return savedBoard;
+        }
+
+        private void RestoreBoardState(BoardCell[,] savedBoard)
+        {
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    var saved = savedBoard[row, col];
+                    _board[row, col] = new BoardCell
+                    {
+                        Row = saved.Row,
+                        Column = saved.Column,
+                        Color = saved.Color,
+                        HasPiece = saved.HasPiece,
+                        PieceColor = saved.PieceColor,
+                        PieceBorderColor = saved.PieceBorderColor,
+                        IsKing = saved.IsKing
+                    };
+                }
+            }
+        }
+    }
+
+
+    public enum AIDifficulty
+    {
+        Easy,
+        Medium,
+        Hard
     }
 }
