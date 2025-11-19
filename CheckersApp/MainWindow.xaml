@@ -115,7 +115,16 @@
                   Background="#107c10" 
                   Foreground="White"
                   FontWeight="SemiBold"
-                  Margin="10,0,0,0"/>     
+                  Margin="10,0,0,0"/>
+                <Button x:Name="UndoButton" 
+                    Content="↶ Отмена хода" 
+                    Click="UndoButton_Click" 
+                    Padding="15,8"
+                    Background="#d13438" 
+                    Foreground="White"
+                    FontWeight="SemiBold"
+                    Margin="10,0,0,0"
+                    ToolTip="Отменить последний ход (Ctrl+Z)"/>
             </StackPanel>
         </Border>
     </Grid>

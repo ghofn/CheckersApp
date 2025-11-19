@@ -15,6 +15,10 @@ namespace CheckersApp
         private AIDifficulty _aiDifficulty;
         private Random _random;
         private Move _lastMove;
+        private Stack<GameState> _gameHistory;
+        private int _maxHistorySize = 10;
+        public int MoveCount { get; private set; }
+        private bool _isMoveInProgress;
 
         public bool IsGameOver { get; private set; }
         public string Winner { get; private set; }
@@ -31,6 +35,61 @@ namespace CheckersApp
             _possibleMoves = new List<Move>();
             IsGameOver = false;
             Winner = "";
+            _gameHistory = new Stack<GameState>();
+            MoveCount = 0;
+            _isMoveInProgress = false;
+        }
+
+        private class GameState
+        {
+            public BoardCell[,] Board { get; set; }
+            public PieceColor CurrentPlayer { get; set; }
+            public Move LastMove { get; set; }
+            public int MoveCount { get; set; }
+            public bool IsMoveInProgress { get; set; }
+        }
+
+        public bool UndoMove()
+        {
+            if (_gameHistory.Count == 0 || IsGameOver)
+                return false;
+
+            var state = _gameHistory.Pop();
+            RestoreBoardState(state.Board);
+            _currentPlayer = state.CurrentPlayer;
+            _lastMove = state.LastMove;
+            MoveCount = state.MoveCount;
+            _isMoveInProgress = state.IsMoveInProgress;
+
+            ClearHighlights();
+            _selectedPiece = null;
+
+            return true;
+        }
+
+        private GameState SaveGameState()
+        {
+            var state = new GameState
+            {
+                Board = SaveBoardState(),
+                CurrentPlayer = _currentPlayer,
+                LastMove = _lastMove,
+                MoveCount = MoveCount,
+                IsMoveInProgress = _isMoveInProgress
+            };
+            return state;
+        }
+
+        private void SaveStateToHistory()
+        {
+            if (_gameHistory.Count >= _maxHistorySize)
+            {
+                // Преобразуем в список, удаляем самый старый и обратно в стек
+                var tempList = _gameHistory.ToList();
+                tempList.RemoveAt(0);
+                _gameHistory = new Stack<GameState>(tempList);
+            }
+            _gameHistory.Push(SaveGameState());
         }
 
         private void InitializeBoard()
@@ -94,13 +153,19 @@ namespace CheckersApp
             }
             else if (_selectedPiece != null && !cell.HasPiece)
             {
+                // Сохраняем состояние только при начале хода, а не при каждом клике
+                if (!_isMoveInProgress)
+                {
+                    SaveStateToHistory();
+                    _isMoveInProgress = true;
+                }
                 TryMakeMove(row, col);
             }
         }
 
         private void SelectPiece(int row, int col)
         {
-            ClearMoveHighlights(); // Используем новую очистку вместо ClearHighlights
+            ClearMoveHighlights();
             _selectedPiece = new Position(row, col);
             _board[row, col].Color = Colors.LightBlue;
 
@@ -132,6 +197,8 @@ namespace CheckersApp
                     }
                 }
 
+                // Ход завершен
+                _isMoveInProgress = false;
                 SwitchPlayer();
                 ClearHighlights();
                 _selectedPiece = null;
@@ -141,12 +208,19 @@ namespace CheckersApp
 
         private void ExecuteMove(Move move)
         {
-            // Очищаем подсветки перед выполнением хода
-            ClearMoveHighlights();
+            // Очищаем подсветку предыдущего хода
+            if (_lastMove != null)
+            {
+                _board[_lastMove.From.Row, _lastMove.From.Column].Color =
+                    (_lastMove.From.Row + _lastMove.From.Column) % 2 == 0 ? Colors.LightGray : Colors.DarkGray;
+                _board[_lastMove.To.Row, _lastMove.To.Column].Color =
+                    (_lastMove.To.Row + _lastMove.To.Column) % 2 == 0 ? Colors.LightGray : Colors.DarkGray;
+            }
 
             var fromCell = _board[move.From.Row, move.From.Column];
             var toCell = _board[move.To.Row, move.To.Column];
 
+            // Перемещаем шашку
             toCell.PieceColor = fromCell.PieceColor;
             toCell.PieceBorderColor = fromCell.PieceBorderColor;
             toCell.HasPiece = true;
@@ -155,31 +229,34 @@ namespace CheckersApp
             fromCell.HasPiece = false;
             fromCell.IsKing = false;
 
+            // Если это взятие - убираем съеденную шашку
             if (move.IsCapture && move.CapturedPiece != null)
             {
                 var capturedCell = _board[move.CapturedPiece.Row, move.CapturedPiece.Column];
                 capturedCell.HasPiece = false;
                 capturedCell.IsKing = false;
+                SoundManager.PlayCaptureSound();
+            }
+            else
+            {
+                SoundManager.PlayMoveSound();
             }
 
             CheckForPromotion(toCell);
 
-            // Обновляем подсветку последнего хода
-            if (_lastMove != null)
-            {
-                _board[_lastMove.From.Row, _lastMove.From.Column].IsLastMove = false;
-                _board[_lastMove.To.Row, _lastMove.To.Column].IsLastMove = false;
-            }
-
+            // Устанавливаем новый последний ход
             _lastMove = move;
-            _board[move.From.Row, move.From.Column].IsLastMove = true;
-            _board[move.To.Row, move.To.Column].IsLastMove = true;
+            _board[move.From.Row, move.From.Column].Color = Color.FromArgb(255, 255, 215, 0);
+            _board[move.To.Row, move.To.Column].Color = Color.FromArgb(255, 255, 215, 0);
         }
 
         public void MakeAIMove()
         {
             if (_gameMode != GameMode.PlayerVsAI || _currentPlayer != PieceColor.Black)
                 return;
+
+            // Сохраняем состояние перед ходом ИИ
+            SaveStateToHistory();
 
             var allMoves = GetAllPossibleMovesForCurrentPlayer();
 
@@ -211,11 +288,13 @@ namespace CheckersApp
 
             ExecuteMove(bestMove);
 
+            // Проверяем возможность продолжения взятия
             if (bestMove.IsCapture)
             {
                 var canContinueCapture = CheckAdditionalCaptures(bestMove.To.Row, bestMove.To.Column);
                 if (canContinueCapture)
                 {
+                    // Рекурсивно продолжаем взятие
                     MakeAIMove();
                     return;
                 }
@@ -224,6 +303,9 @@ namespace CheckersApp
             SwitchPlayer();
             CheckGameOver();
         }
+
+        // Остальные методы остаются без изменений...
+        // [Здесь должны быть все остальные методы из твоего кода]
 
         public List<Move> GetAllPossibleMovesForCurrentPlayer()
         {
@@ -555,12 +637,14 @@ namespace CheckersApp
             {
                 IsGameOver = true;
                 Winner = _currentPlayer == PieceColor.White ? "черные" : "белые";
+                SoundManager.PlayVictorySound();
             }
         }
 
         private void SwitchPlayer()
         {
             _currentPlayer = _currentPlayer == PieceColor.White ? PieceColor.Black : PieceColor.White;
+            MoveCount++;
         }
 
         private Color GetCurrentPlayerColor()
@@ -572,16 +656,16 @@ namespace CheckersApp
         {
             if (IsGameOver)
             {
-                return $"Игра окончена! Победили {Winner}!";
+                return $"Игра окончена! Победили {Winner}! Ходов: {MoveCount}";
             }
 
             var forcedCaptures = GetAllPossibleCapturesForCurrentPlayer();
             if (forcedCaptures.Count > 0)
             {
-                return $"Ход: {(_currentPlayer == PieceColor.White ? "белые" : "черные")} - ОБЯЗАН БИТЬ!";
+                return $"Ход: {(_currentPlayer == PieceColor.White ? "белые" : "черные")} - ОБЯЗАН БИТЬ! Ходов: {MoveCount}";
             }
 
-            return $"Ход: {(_currentPlayer == PieceColor.White ? "белые" : "черные")}";
+            return $"Ход: {(_currentPlayer == PieceColor.White ? "белые" : "черные")}. Ходов: {MoveCount}";
         }
 
         // Методы для ИИ
@@ -752,7 +836,8 @@ namespace CheckersApp
                 }
             }
         }
-        public void ClearHints() 
+
+        public void ClearHints()
         {
             for (int row = 0; row < 8; row++)
             {
@@ -762,13 +847,13 @@ namespace CheckersApp
                 }
             }
         }
+
         public void ClearMoveHighlights()
         {
             for (int row = 0; row < 8; row++)
             {
                 for (int col = 0; col < 8; col++)
                 {
-                    // Сбрасываем только цвета ходов, но сохраняем последний ход
                     if (_board[row, col].Color == Colors.LightBlue ||
                         _board[row, col].Color == Colors.Orange ||
                         _board[row, col].Color == Colors.LightGreen)
@@ -776,6 +861,19 @@ namespace CheckersApp
                         _board[row, col].Color = (row + col) % 2 == 0 ? Colors.LightGray : Colors.DarkGray;
                     }
                 }
+            }
+        }
+        public void ShowHint()
+        {
+            ClearHints();
+
+            var allMoves = GetAllPossibleMovesForCurrentPlayer();
+
+            foreach (var move in allMoves)
+            {
+                _board[move.From.Row, move.From.Column].IsHighlighted = true;
+
+                _board[move.To.Row, move.To.Column].IsHighlighted = true;
             }
         }
     }

@@ -137,10 +137,9 @@ namespace CheckersApp
         {
             var allMoves = _gameEngine.GetAllPossibleMovesForCurrentPlayer();
 
-            // Подсвечиваем все возможные ходы
             foreach (var move in allMoves)
             {
-                // Подсвечиваем конечные позиции возможных ходов
+ 
                 var cells = _gameEngine.GetBoardCells();
                 foreach (var cell in cells)
                 {
@@ -153,11 +152,45 @@ namespace CheckersApp
 
             UpdateBoard();
 
-            // Через 3 секунды убираем подсказку
             await Task.Delay(3000);
 
             _gameEngine.ClearHints();
             UpdateBoard();
+        }
+        private void UndoButton_Click(object sender, RoutedEventArgs e)
+        {
+            UndoLastMove();
+        }
+
+        private void UndoLastMove()
+        {
+            if (_gameEngine.UndoMove())
+            {
+                UpdateBoard();
+                UpdateStatus();
+
+                if (_gameMode == GameMode.PlayerVsAI && _gameEngine.CurrentPlayer == PieceColor.White)
+                {
+                    _gameEngine.UndoMove();
+                    UpdateBoard();
+                    UpdateStatus();
+                }
+            }
+            else
+            {
+                MessageBox.Show("Нельзя отменить ход", "Информация",
+                               MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                UndoLastMove();
+                e.Handled = true;
+            }
+            base.OnKeyDown(e);
         }
     }
 }
