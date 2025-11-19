@@ -1,8 +1,9 @@
-﻿using System.Windows;
+﻿using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Threading.Tasks;
+using static CheckersApp.GameEngine;
 
 namespace CheckersApp
 {
@@ -12,24 +13,26 @@ namespace CheckersApp
         private GameMode _gameMode;
 
         // Обновленный конструктор с параметром режима
-        public MainWindow(GameMode gameMode = GameMode.TwoPlayers)
+        public MainWindow(GameMode gameMode = GameMode.TwoPlayers, AIDifficulty aiDifficulty = AIDifficulty.Medium)
         {
             InitializeComponent();
-
-            if (_gameMode == GameMode.PlayerVsAI)
-                TitleText.Text += " (против ИИ)";
             _gameMode = gameMode;
-            StartNewGame();
+            StartNewGame(aiDifficulty);
 
-            // Обновляем заголовок в зависимости от режима
             if (_gameMode == GameMode.PlayerVsAI)
-                Title += " (против ИИ)";
+                Title += $" (против ИИ - {aiDifficulty})";
         }
 
+        private void StartNewGame(AIDifficulty aiDifficulty = AIDifficulty.Medium)
+        {
+            _gameEngine = new GameEngine(_gameMode, aiDifficulty);
+            UpdateBoard();
+            UpdateStatus();
+        }
         private void StartNewGame()
         {
             _gameEngine = new GameEngine(_gameMode);
-            UpdateBoard();э
+            UpdateBoard();
             UpdateStatus();
         }
 

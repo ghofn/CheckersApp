@@ -14,21 +14,20 @@
 
         <!-- Заголовок -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
-    <Button x:Name="BackToMenuButton" 
+            <Button x:Name="BackToMenuButton" 
             Content="← В меню" 
             Click="BackToMenuButton_Click" 
             Padding="10,5"
             Background="#555" 
             Foreground="White"
             Margin="0,0,20,0"/>
-    
-    <TextBlock x:Name="TitleText" 
-               Text="Английские шашки" 
+
+            <TextBlock Text="Английские шашки" 
                FontSize="20" 
                Foreground="White" 
                FontWeight="Bold"
                VerticalAlignment="Center"/>
-</StackPanel>
+        </StackPanel>
         <!-- Игровое поле -->
         <ItemsControl x:Name="BoardItemsControl" 
                       Grid.Row="1" 

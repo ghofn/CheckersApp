@@ -13,15 +13,16 @@ namespace CheckersApp
         private List<Move> _possibleMoves;
         private GameMode _gameMode;
         private Random _random;
-
+        private AIDifficulty _aiDifficulty = AIDifficulty.Medium;
         public PieceColor CurrentPlayer => _currentPlayer;
 
 
         public bool IsGameOver { get; private set; }
 
-        public GameEngine(GameMode gameMode = GameMode.TwoPlayers)
+        public GameEngine(GameMode gameMode = GameMode.TwoPlayers, AIDifficulty aiDifficulty = AIDifficulty.Medium)
         {
             _gameMode = gameMode;
+            _aiDifficulty = aiDifficulty;
             _random = new Random();
             InitializeBoard();
             _currentPlayer = PieceColor.White;
@@ -410,6 +411,253 @@ namespace CheckersApp
             return captures;
         }
 
+
+        private int EvaluatePosition()
+        {
+            int score = 0;
+            int blackPieces = 0;
+            int whitePieces = 0;
+            int blackKings = 0;
+            int whiteKings = 0;
+
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    var cell = _board[row, col];
+                    if (cell.HasPiece)
+                    {
+                        int positionScore = 0;
+
+                        if (cell.PieceColor == Colors.Black)
+                        {
+                            blackPieces++;
+                            if (cell.IsKing)
+                            {
+                                blackKings++;
+                                positionScore += 35; // Дамки очень ценны
+
+                                // Дамки в центре и на флангах
+                                if (col >= 2 && col <= 5) positionScore += 3;
+                                if (row >= 2 && row <= 5) positionScore += 2;
+                            }
+                            else
+                            {
+                                positionScore += 10;
+                                // Сильно поощряем продвижение к дамке
+                                positionScore += (7 - row) * 3;
+                                // Защищенные пешки (рядом с краем)
+                                if (col == 0 || col == 7) positionScore += 2;
+                                // Пешки в центре
+                                if (col >= 3 && col <= 4) positionScore += 1;
+                            }
+
+                            score += positionScore;
+                        }
+                        else // Белые
+                        {
+                            whitePieces++;
+                            if (cell.IsKing)
+                            {
+                                whiteKings++;
+                                positionScore += 35;
+                                if (col >= 2 && col <= 5) positionScore += 3;
+                                if (row >= 2 && row <= 5) positionScore += 2;
+                            }
+                            else
+                            {
+                                positionScore += 10;
+                                positionScore += row * 3; // Для белых чем ниже, тем лучше
+                                if (col == 0 || col == 7) positionScore += 2;
+                                if (col >= 3 && col <= 4) positionScore += 1;
+                            }
+
+                            score -= positionScore;
+                        }
+                    }
+                }
+            }
+
+            // Бонус за мобильность
+            var blackMoves = GetAllPossibleMovesForColor(Colors.Black);
+            var whiteMoves = GetAllPossibleMovesForColor(Colors.White);
+
+            score += blackMoves.Count * 3;
+            score -= whiteMoves.Count * 3;
+
+            // Сильный бонус за материальное преимущество
+            int materialDiff = (blackPieces * 10 + blackKings * 25) - (whitePieces * 10 + whiteKings * 25);
+            score += materialDiff;
+
+            // В эндшпиле короли становятся еще важнее
+            int totalPieces = blackPieces + whitePieces;
+            if (totalPieces < 6)
+            {
+                score += blackKings * 15;
+                score -= whiteKings * 15;
+
+                // В эндшпиле поощряем централизацию дамок
+                for (int row = 0; row < 8; row++)
+                {
+                    for (int col = 0; col < 8; col++)
+                    {
+                        var cell = _board[row, col];
+                        if (cell.HasPiece && cell.IsKing)
+                        {
+                            int centerBonus = 0;
+                            if (row >= 3 && row <= 4 && col >= 3 && col <= 4) centerBonus = 5;
+                            else if (row >= 2 && row <= 5 && col >= 2 && col <= 5) centerBonus = 3;
+
+                            if (cell.PieceColor == Colors.Black)
+                                score += centerBonus;
+                            else
+                                score -= centerBonus;
+                        }
+                    }
+                }
+            }
+
+            return score;
+        }
+
+        // Вспомогательный метод для получения ходов по цвету
+        private List<Move> GetAllPossibleMovesForColor(Color color)
+        {
+            var moves = new List<Move>();
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    if (_board[row, col].HasPiece && _board[row, col].PieceColor == color)
+                    {
+                        moves.AddRange(CalculatePossibleMoves(row, col));
+                    }
+                }
+            }
+            return moves;
+        }
+
+
+        private int Minimax(int depth, int alpha, int beta, bool maximizingPlayer)
+        {
+            // Если достигнута максимальная глубина или игра окончена, возвращаем оценку
+            if (depth == 0 || IsGameOver)
+            {
+                return EvaluatePosition();
+            }
+
+            var moves = GetAllPossibleMovesForCurrentPlayer();
+
+            if (maximizingPlayer) // ИИ (черные) - максимизируем оценку
+            {
+                int maxEval = int.MinValue;
+
+                foreach (var move in moves)
+                {
+                    // Сохраняем состояние до хода
+                    var savedBoard = SaveBoardState();
+
+                    // Делаем ход
+                    ExecuteMove(move);
+
+                    // Рекурсивно оцениваем позицию
+                    int eval = Minimax(depth - 1, alpha, beta, false);
+
+                    // Возвращаем состояние
+                    RestoreBoardState(savedBoard);
+
+                    maxEval = Math.Max(maxEval, eval);
+                    alpha = Math.Max(alpha, eval);
+                    if (beta <= alpha)
+                        break; // Альфа-бета отсечение
+                }
+
+                return maxEval;
+            }
+            else // Игрок (белые) - минимизируем оценку
+            {
+                int minEval = int.MaxValue;
+
+                foreach (var move in moves)
+                {
+                    // Сохраняем состояние до хода
+                    var savedBoard = SaveBoardState();
+
+                    // Делаем ход
+                    ExecuteMove(move);
+
+                    // Рекурсивно оцениваем позицию
+                    int eval = Minimax(depth - 1, alpha, beta, true);
+
+                    // Возвращаем состояние
+                    RestoreBoardState(savedBoard);
+
+                    minEval = Math.Min(minEval, eval);
+                    beta = Math.Min(beta, eval);
+                    if (beta <= alpha)
+                        break; // Альфа-бета отсечение
+                }
+
+                return minEval;
+            }
+        }
+
+        // Сохраняем состояние доски
+        private BoardCell[,] SaveBoardState()
+        {
+            var savedBoard = new BoardCell[8, 8];
+
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    var original = _board[row, col];
+                    savedBoard[row, col] = new BoardCell
+                    {
+                        Row = original.Row,
+                        Column = original.Column,
+                        Color = original.Color,
+                        HasPiece = original.HasPiece,
+                        PieceColor = original.PieceColor,
+                        PieceBorderColor = original.PieceBorderColor,
+                        IsKing = original.IsKing
+                    };
+                }
+            }
+
+            return savedBoard;
+        }
+
+        // Восстанавливаем состояние доски
+        private void RestoreBoardState(BoardCell[,] savedBoard)
+        {
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    var saved = savedBoard[row, col];
+                    _board[row, col] = new BoardCell
+                    {
+                        Row = saved.Row,
+                        Column = saved.Column,
+                        Color = saved.Color,
+                        HasPiece = saved.HasPiece,
+                        PieceColor = saved.PieceColor,
+                        PieceBorderColor = saved.PieceBorderColor,
+                        IsKing = saved.IsKing
+                    };
+                }
+            }
+        }
+
+
+
+
+
+
+
+
+
         private List<Position> GetForwardDirections(Color pieceColor)
         {
             // Обычные шашки бьют ТОЛЬКО ВПЕРЕД
@@ -499,37 +747,62 @@ namespace CheckersApp
 
         public void MakeAIMove()
         {
-            if (_currentPlayer != PieceColor.Black) return;
+            if (_gameMode != GameMode.PlayerVsAI || _currentPlayer != PieceColor.Black)
+                return;
 
-            // Получаем все возможные ходы для черных
             var allMoves = GetAllPossibleMovesForCurrentPlayer();
 
-            if (allMoves.Count > 0)
+            if (allMoves.Count == 0)
             {
-                // Выбираем случайный ход
-                var move = allMoves[_random.Next(allMoves.Count)];
-
-                ExecuteMove(move);
-
-                // Проверяем продолжение взятия
-                if (move.IsCapture)
-                {
-                    var canContinueCapture = CheckAdditionalCaptures(move.To.Row, move.To.Column);
-                    if (canContinueCapture)
-                    {
-                        // Продолжаем взятие
-                        MakeAIMove();
-                        return;
-                    }
-                }
-
-                SwitchPlayer();
-            }
-            else
-            {
-                // Нет возможных ходов - игра окончена
                 IsGameOver = true;
+                return;
             }
+
+            Move bestMove = null;
+
+            // Разная логика в зависимости от уровня сложности
+            switch (_aiDifficulty)
+            {
+                case AIDifficulty.Easy:
+                    // Случайные ходы (как было)
+                    bestMove = allMoves[_random.Next(allMoves.Count)];
+                    break;
+
+                case AIDifficulty.Medium:
+                    bestMove = FindBestMove(4); // Увеличили до 4
+                    break;
+
+                case AIDifficulty.Hard:
+                    bestMove = FindBestMove(6); // Увеличили до 6
+                    break;
+            }
+
+            // Если не нашли лучший ход, берем случайный
+            if (bestMove == null)
+                bestMove = allMoves[_random.Next(allMoves.Count)];
+
+            // Выполняем ход
+            ExecuteMove(bestMove);
+
+            // Проверяем продолжение взятия
+            if (bestMove.IsCapture)
+            {
+                var canContinueCapture = CheckAdditionalCaptures(bestMove.To.Row, bestMove.To.Column);
+                if (canContinueCapture)
+                {
+                    MakeAIMove();
+                    return;
+                }
+            }
+
+            SwitchPlayer();
+        }
+
+        public enum AIDifficulty
+        {
+            Easy,    // Случайные ходы
+            Medium,  // Минимакс с глубиной 2
+            Hard     // Минимакс с глубиной 4
         }
 
         // НОВЫЙ МЕТОД: Получить все возможные ходы для текущего игрока
@@ -561,6 +834,80 @@ namespace CheckersApp
             }
 
             return allMoves;
+        }
+
+        private Move FindBestMove(int depth)
+        {
+            var allMoves = GetAllPossibleMovesForCurrentPlayer();
+
+            // Сортируем ходы: сначала взятия, потом остальные
+            allMoves = allMoves.OrderByDescending(m => m.IsCapture).ThenBy(m => _random.Next()).ToList();
+
+            Move bestMove = null;
+            int bestEvaluation = int.MinValue;
+
+            foreach (var move in allMoves)
+            {
+                var savedBoard = SaveBoardState();
+                var savedPlayer = _currentPlayer;
+                var savedGameOver = IsGameOver;
+
+                ExecuteMove(move);
+
+                // Если ход со взятием и можно продолжать, делаем это
+                if (move.IsCapture)
+                {
+                    var canContinueCapture = CheckAdditionalCaptures(move.To.Row, move.To.Column);
+                    if (canContinueCapture)
+                    {
+                        // Рекурсивно продолжаем взятие
+                        var continuationMoves = GetAllPossibleMovesForCurrentPlayer();
+                        if (continuationMoves.Count > 0)
+                        {
+                            var bestContinuation = FindBestMove(depth);
+                            if (bestContinuation != null)
+                            {
+                                // Восстанавливаем состояние и применяем полную последовательность
+                                RestoreBoardState(savedBoard);
+                                _currentPlayer = savedPlayer;
+                                IsGameOver = savedGameOver;
+
+                                ExecuteMove(move);
+                                ExecuteMove(bestContinuation);
+
+                                // ИСПРАВЛЕНИЕ: переименовал переменную
+                                int continuationEvaluation = Minimax(depth - 1, int.MinValue, int.MaxValue, false);
+
+                                RestoreBoardState(savedBoard);
+                                _currentPlayer = savedPlayer;
+                                IsGameOver = savedGameOver;
+
+                                if (continuationEvaluation > bestEvaluation)
+                                {
+                                    bestEvaluation = continuationEvaluation;
+                                    bestMove = move;
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                // ИСПРАВЛЕНИЕ: это основная переменная evaluation
+                int moveEvaluation = Minimax(depth - 1, int.MinValue, int.MaxValue, false);
+
+                RestoreBoardState(savedBoard);
+                _currentPlayer = savedPlayer;
+                IsGameOver = savedGameOver;
+
+                if (moveEvaluation > bestEvaluation)
+                {
+                    bestEvaluation = moveEvaluation;
+                    bestMove = move;
+                }
+            }
+
+            return bestMove;
         }
     }
 }

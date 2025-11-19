@@ -2,20 +2,21 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Английские шашки" 
-        Height="500" 
-        Width="400"
+        Height="550" 
+        Width="450"
         WindowStartupLocation="CenterScreen"
         Background="#1e1e1e"
         ResizeMode="NoResize">
 
     <Window.Resources>
+        <!-- Стиль для обычных кнопок -->
         <Style x:Key="MenuButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="#0078d4"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="20,10"/>
-            <Setter Property="Margin" Value="0,10"/>
+            <Setter Property="Margin" Value="0,5"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Height" Value="50"/>
             <Style.Triggers>
@@ -25,6 +26,7 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Стиль для кнопки выхода -->
         <Style x:Key="ExitButtonStyle" TargetType="Button" BasedOn="{StaticResource MenuButtonStyle}">
             <Setter Property="Background" Value="#d13438"/>
             <Style.Triggers>
@@ -33,32 +35,66 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Простой стиль для RadioButton -->
+        <Style x:Key="DifficultyButtonStyle" TargetType="RadioButton">
+            <Setter Property="Background" Value="#333"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="BorderBrush" Value="#555"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="BorderBrush" Value="#0078d4"/>
+                    <Setter Property="Background" Value="#005a9e"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#444"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="300">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="350">
             <!-- Заголовок -->
             <TextBlock Text="Английские шашки" 
                        FontSize="28" 
                        Foreground="White" 
                        FontWeight="Bold" 
                        HorizontalAlignment="Center" 
-                       Margin="0,0,0,30"/>
+                       Margin="0,0,0,20"/>
+
+            <!-- Выбор сложности -->
+            <TextBlock Text="Уровень сложности:" 
+                       FontSize="16" 
+                       Foreground="White" 
+                       Margin="0,10,0,5"/>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <RadioButton x:Name="EasyButton" Content="Легкий" 
+                           Style="{StaticResource DifficultyButtonStyle}"
+                           GroupName="Difficulty" Tag="Easy"/>
+                <RadioButton x:Name="MediumButton" Content="Средний" 
+                           Style="{StaticResource DifficultyButtonStyle}"
+                           GroupName="Difficulty" Tag="Medium" IsChecked="True"/>
+                <RadioButton x:Name="HardButton" Content="Сложный" 
+                           Style="{StaticResource DifficultyButtonStyle}"
+                           GroupName="Difficulty" Tag="Hard"/>
+            </StackPanel>
 
             <!-- Кнопки меню -->
             <Button x:Name="PlayVsAIButton" 
                     Content="Играть против ИИ" 
                     Click="PlayVsAIButton_Click"
-                    Style="{StaticResource MenuButtonStyle}"/>
+                    Style="{StaticResource MenuButtonStyle}"
+                    Margin="0,20,0,0"/>
 
             <Button x:Name="PlayTwoPlayersButton" 
                     Content="Два игрока" 
                     Click="PlayTwoPlayersButton_Click"
-                    Style="{StaticResource MenuButtonStyle}"/>
-
-            <Button x:Name="SettingsButton" 
-                    Content="Настройки" 
-                    Click="SettingsButton_Click"
                     Style="{StaticResource MenuButtonStyle}"/>
 
             <Button x:Name="ExitButton" 
