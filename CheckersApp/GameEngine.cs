@@ -84,7 +84,6 @@ namespace CheckersApp
         {
             if (_gameHistory.Count >= _maxHistorySize)
             {
-                // Преобразуем в список, удаляем самый старый и обратно в стек
                 var tempList = _gameHistory.ToList();
                 tempList.RemoveAt(0);
                 _gameHistory = new Stack<GameState>(tempList);
@@ -153,7 +152,6 @@ namespace CheckersApp
             }
             else if (_selectedPiece != null && !cell.HasPiece)
             {
-                // Сохраняем состояние только при начале хода, а не при каждом клике
                 if (!_isMoveInProgress)
                 {
                     SaveStateToHistory();
@@ -197,7 +195,6 @@ namespace CheckersApp
                     }
                 }
 
-                // Ход завершен
                 _isMoveInProgress = false;
                 SwitchPlayer();
                 ClearHighlights();
@@ -208,7 +205,6 @@ namespace CheckersApp
 
         private void ExecuteMove(Move move)
         {
-            // Очищаем подсветку предыдущего хода
             if (_lastMove != null)
             {
                 _board[_lastMove.From.Row, _lastMove.From.Column].Color =
@@ -220,7 +216,6 @@ namespace CheckersApp
             var fromCell = _board[move.From.Row, move.From.Column];
             var toCell = _board[move.To.Row, move.To.Column];
 
-            // Перемещаем шашку
             toCell.PieceColor = fromCell.PieceColor;
             toCell.PieceBorderColor = fromCell.PieceBorderColor;
             toCell.HasPiece = true;
@@ -229,7 +224,6 @@ namespace CheckersApp
             fromCell.HasPiece = false;
             fromCell.IsKing = false;
 
-            // Если это взятие - убираем съеденную шашку
             if (move.IsCapture && move.CapturedPiece != null)
             {
                 var capturedCell = _board[move.CapturedPiece.Row, move.CapturedPiece.Column];
@@ -244,7 +238,6 @@ namespace CheckersApp
 
             CheckForPromotion(toCell);
 
-            // Устанавливаем новый последний ход
             _lastMove = move;
             _board[move.From.Row, move.From.Column].Color = Color.FromArgb(255, 255, 215, 0);
             _board[move.To.Row, move.To.Column].Color = Color.FromArgb(255, 255, 215, 0);
@@ -255,7 +248,6 @@ namespace CheckersApp
             if (_gameMode != GameMode.PlayerVsAI || _currentPlayer != PieceColor.Black)
                 return;
 
-            // Сохраняем состояние перед ходом ИИ
             SaveStateToHistory();
 
             var allMoves = GetAllPossibleMovesForCurrentPlayer();
@@ -288,13 +280,11 @@ namespace CheckersApp
 
             ExecuteMove(bestMove);
 
-            // Проверяем возможность продолжения взятия
             if (bestMove.IsCapture)
             {
                 var canContinueCapture = CheckAdditionalCaptures(bestMove.To.Row, bestMove.To.Column);
                 if (canContinueCapture)
                 {
-                    // Рекурсивно продолжаем взятие
                     MakeAIMove();
                     return;
                 }
@@ -303,10 +293,6 @@ namespace CheckersApp
             SwitchPlayer();
             CheckGameOver();
         }
-
-        // Остальные методы остаются без изменений...
-        // [Здесь должны быть все остальные методы из твоего кода]
-
         public List<Move> GetAllPossibleMovesForCurrentPlayer()
         {
             var allMoves = new List<Move>();
@@ -874,6 +860,39 @@ namespace CheckersApp
                 _board[move.From.Row, move.From.Column].IsHighlighted = true;
 
                 _board[move.To.Row, move.To.Column].IsHighlighted = true;
+            }
+        }
+        public Move GetBestMoveHint()
+        {
+            var allMoves = GetAllPossibleMovesForCurrentPlayer();
+            if (allMoves.Count == 0) return null;
+            Move bestMove = null;
+
+            switch (_aiDifficulty)
+            {
+                case AIDifficulty.Easy:
+                    bestMove = allMoves[_random.Next(allMoves.Count)];
+                    break;
+                case AIDifficulty.Medium:
+                    bestMove = FindBestMove(2);
+                    break;
+                case AIDifficulty.Hard:
+                    bestMove = FindBestMove(4);
+                    break;
+            }
+
+            return bestMove ?? allMoves[_random.Next(allMoves.Count)];
+        }
+
+        public void ShowBestMoveHint(Move bestMove)
+        {
+            ClearHints();
+
+            if (bestMove != null)
+            {
+                _board[bestMove.From.Row, bestMove.From.Column].IsHighlighted = true;
+
+                _board[bestMove.To.Row, bestMove.To.Column].IsHighlighted = true;
             }
         }
     }

@@ -26,7 +26,6 @@ namespace CheckersApp
                     return new SolidColorBrush(Color.FromArgb(255, 255, 215, 0)); 
                 }
 
-                // Обычный цвет клетки
                 return new SolidColorBrush(cell.Color);
             }
 
@@ -40,7 +39,6 @@ namespace CheckersApp
 
         private bool IsPossibleMove(BoardCell cell)
         {
-            // Проверяем, является ли клетка возможным ходом
             return cell.Color == Colors.Orange || cell.Color == Colors.LightGreen;
         }
 

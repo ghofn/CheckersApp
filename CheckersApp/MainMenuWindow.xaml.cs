@@ -38,12 +38,6 @@ namespace CheckersApp
             this.Close();
         }
 
-        private void SettingsButton_Click(object sender, RoutedEventArgs e)
-        {
-            MessageBox.Show("Настройки будут добавлены в следующем обновлении!", "Настройки",
-                          MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
         private void ExitButton_Click(object sender, RoutedEventArgs e)
         {
             Application.Current.Shutdown();

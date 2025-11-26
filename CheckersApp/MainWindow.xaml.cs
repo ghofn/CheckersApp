@@ -19,7 +19,7 @@ namespace CheckersApp
             StartNewGame(aiDifficulty);
 
             if (_gameMode == GameMode.PlayerVsAI)
-                Title += $" (против ИИ - {aiDifficulty})";
+                Title += $" (против компьютера - {aiDifficulty})";
         }
 
         private void StartNewGame(AIDifficulty aiDifficulty = AIDifficulty.Medium)
@@ -121,45 +121,65 @@ namespace CheckersApp
             this.Close();
         }
 
-        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
-        {
-        }
-        private void HintButton_Click(object sender, RoutedEventArgs e)
+        private async void HintButton_Click(object sender, RoutedEventArgs e)
         {
             if (_gameEngine.IsGameOver ||
                 (_gameMode == GameMode.PlayerVsAI && _gameEngine.CurrentPlayer == PieceColor.Black))
                 return;
 
-            ShowPossibleMovesHint();
-        }
+            var bestMove = _gameEngine.GetBestMoveHint();
 
-        private async void ShowPossibleMovesHint()
-        {
-            var allMoves = _gameEngine.GetAllPossibleMovesForCurrentPlayer();
-
-            foreach (var move in allMoves)
+            if (bestMove != null)
             {
- 
-                var cells = _gameEngine.GetBoardCells();
-                foreach (var cell in cells)
-                {
-                    if (cell.Row == move.To.Row && cell.Column == move.To.Column)
-                    {
-                        cell.IsHighlighted = true;
-                    }
-                }
+                // Показываем подсказку ИИ
+                _gameEngine.ShowBestMoveHint(bestMove);
+                UpdateBoard();
+
+                // Временно меняем статус на подсказку
+                string originalStatus = StatusText.Text;
+                StatusText.Text = $"Совет: {GetMoveDescription(bestMove)}";
+                StatusText.Foreground = new SolidColorBrush(Color.FromRgb(156, 39, 176));
+
+                // Ждем 5 секунд и убираем подсказку
+                await Task.Delay(5000);
+
+                _gameEngine.ClearHints();
+                UpdateBoard();
+                StatusText.Text = originalStatus;
+                StatusText.Foreground = new SolidColorBrush(Colors.White);
             }
-
-            UpdateBoard();
-
-            await Task.Delay(3000);
-
-            _gameEngine.ClearHints();
-            UpdateBoard();
+            else
+            {
+                StatusText.Text = "Нет возможных ходов";
+                StatusText.Foreground = new SolidColorBrush(Colors.Red);
+                await Task.Delay(2000);
+                UpdateStatus();
+            }
         }
-        private void UndoButton_Click(object sender, RoutedEventArgs e)
+
+        private string GetMoveDescription(Move move)
         {
-            UndoLastMove();
+            string from = $"{(char)('A' + move.From.Column)}{8 - move.From.Row}";
+            string to = $"{(char)('A' + move.To.Column)}{8 - move.To.Row}";
+
+            if (move.IsCapture)
+            {
+                return $"Взять с {from} на {to}";
+            }
+            else
+            {
+                return $"Сходить с {from} на {to}";
+            }
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                UndoLastMove();
+                e.Handled = true;
+            }
+            base.OnKeyDown(e);
         }
 
         private void UndoLastMove()
@@ -181,16 +201,6 @@ namespace CheckersApp
                 MessageBox.Show("Нельзя отменить ход", "Информация",
                                MessageBoxButton.OK, MessageBoxImage.Information);
             }
-        }
-
-        protected override void OnKeyDown(KeyEventArgs e)
-        {
-            if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
-            {
-                UndoLastMove();
-                e.Handled = true;
-            }
-            base.OnKeyDown(e);
         }
     }
 }
