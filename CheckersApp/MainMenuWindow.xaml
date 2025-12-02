@@ -118,7 +118,7 @@
 
         <!-- Нижняя панель -->
         <Border Grid.Row="1" Background="#2d2d30" Padding="10">
-            <TextBlock Text="Шашки v2.0 © 2024" 
+            <TextBlock Text="Шашки v0.1 © 2025" 
                        Foreground="#a0c8e0" 
                        FontSize="12"
                        HorizontalAlignment="Center"/>
