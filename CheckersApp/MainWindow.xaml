@@ -1,9 +1,22 @@
 ﻿<Window x:Class="CheckersApp.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Английские шашки" Height="750" Width="850"
+        xmlns:local="clr-namespace:CheckersApp"
+        Title="Шашки" 
+        Height="750" 
+        Width="850"
         WindowStartupLocation="CenterScreen"
-        Background="#1e1e1e">
+        Background="#1e1e1e"
+        ResizeMode="NoResize">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <local:ColorToBrushConverter x:Key="ColorToBrushConverter"/>
+        <local:CellColorConverter x:Key="CellColorConverter"/>
+        <local:KingVisibilityConverter x:Key="KingVisibilityConverter"/>
+        <local:SkinColorConverter x:Key="SkinColorConverter"/>
+        <local:SkinKingSymbolConverter x:Key="SkinKingSymbolConverter"/>
+    </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -12,7 +25,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Заголовок -->
+        <!-- Верхняя панель -->
         <Border Grid.Row="0" Background="#2d2d30" Padding="10">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Button x:Name="BackToMenuButton" 
@@ -22,32 +35,50 @@
                         Background="#555" 
                         Foreground="White"
                         FontWeight="SemiBold"
-                        Margin="0,0,10,0"/>
+                        Margin="0,0,10,0"
+                        Cursor="Hand"/>
 
-                <TextBlock Text="Английские шашки" 
-                           FontSize="22" 
-                           Foreground="White" 
-                           FontWeight="Bold"
-                           VerticalAlignment="Center"
-                           Margin="0,0,10,0"/>
-
-                <Button x:Name="HintButton" 
-                        Content="🤖 Подсказка" 
-                        Click="HintButton_Click" 
+                <Button x:Name="SkinsButton" 
+                        Content="🎨 Скины" 
+                        Click="SkinsButton_Click" 
                         Padding="15,8"
                         Background="#9c27b0" 
                         Foreground="White"
                         FontWeight="SemiBold"
                         Margin="0,0,10,0"
+                        Cursor="Hand"
+                        ToolTip="Изменить стиль шашек"/>
+
+                <Button x:Name="HintButton" 
+                        Content="💡 Подсказка" 
+                        Click="HintButton_Click" 
+                        Padding="15,8"
+                        Background="#2196F3" 
+                        Foreground="White"
+                        FontWeight="SemiBold"
+                        Margin="0,0,10,0"
+                        Cursor="Hand"
                         ToolTip="Показать рекомендуемый ход"/>
+
+                <Button x:Name="SoundButton" 
+                        Content="🔊 Звуки" 
+                        Click="SoundToggleButton_Click" 
+                        Padding="15,8"
+                        Background="#FF9800" 
+                        Foreground="White"
+                        FontWeight="SemiBold"
+                        Margin="0,0,10,0"
+                        Cursor="Hand"
+                        ToolTip="Включить/выключить звуки"/>
 
                 <Button x:Name="RestartButton" 
                         Content="🔄 Новая игра" 
                         Click="RestartButton_Click" 
                         Padding="15,8"
-                        Background="#0078d4" 
+                        Background="#4CAF50" 
                         Foreground="White"
-                        FontWeight="SemiBold"/>
+                        FontWeight="SemiBold"
+                        Cursor="Hand"/>
             </StackPanel>
         </Border>
 
@@ -64,34 +95,42 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
                     <Border BorderBrush="#444" BorderThickness="1" 
-                Width="70" Height="70"
-                MouseDown="Border_MouseDown">
-
+                            Width="70" Height="70"
+                            MouseDown="Border_MouseDown"
+                            Cursor="Hand">
                         <Border.Background>
-                            <Binding Path="Color" Converter="{StaticResource ColorToBrushConverter}"/>
+                            <Binding Converter="{StaticResource CellColorConverter}"/>
                         </Border.Background>
 
                         <Grid>
-                            <Rectangle Fill="#9c27b0" Opacity="0.4" 
-                          Visibility="{Binding IsHighlighted, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
                             <!-- Шашка -->
                             <Ellipse Width="45" Height="45" 
-                         Fill="{Binding PieceColor, Converter={StaticResource ColorToBrushConverter}}" 
-                         Stroke="{Binding PieceBorderColor, Converter={StaticResource ColorToBrushConverter}}" 
-                         StrokeThickness="2"
-                         Visibility="{Binding HasPiece, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsKing}" Value="True">
-                                                <Setter Property="Stroke" Value="Gold"/>
-                                                <Setter Property="StrokeThickness" Value="3"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
+                                     StrokeThickness="2"
+                                     Visibility="{Binding HasPiece, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Ellipse.Fill>
+                                    <Binding Converter="{StaticResource SkinColorConverter}"
+                                             ConverterParameter="PieceColor"/>
+                                </Ellipse.Fill>
+                                <Ellipse.Stroke>
+                                    <Binding Converter="{StaticResource SkinColorConverter}"
+                                             ConverterParameter="PieceBorderColor"/>
+                                </Ellipse.Stroke>
                             </Ellipse>
+
+                            <!-- Коронка для дамки -->
+                            <TextBlock FontSize="18" 
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsKing, Converter={StaticResource KingVisibilityConverter}}">
+                                <TextBlock.Text>
+                                    <Binding Converter="{StaticResource SkinKingSymbolConverter}"/>
+                                </TextBlock.Text>
+                                <TextBlock.Foreground>
+                                    <Binding Converter="{StaticResource SkinColorConverter}"
+                                             ConverterParameter="KingColor"/>
+                                </TextBlock.Foreground>
+                            </TextBlock>
                         </Grid>
                     </Border>
                 </DataTemplate>
@@ -105,8 +144,13 @@
                            Text="Ход белых" 
                            Foreground="White" 
                            FontSize="16" 
-                           VerticalAlignment="Center"
                            FontWeight="SemiBold"/>
+
+                <TextBlock x:Name="StatisticsText" 
+                           Text=" | Белые: 12 | Черные: 12 | Ходы: 0" 
+                           Foreground="#a0c8e0" 
+                           FontSize="14"
+                           Margin="20,0,0,0"/>
             </StackPanel>
         </Border>
     </Grid>

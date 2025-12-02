@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -11,33 +13,33 @@ namespace CheckersApp
     {
         private GameEngine _gameEngine;
         private GameMode _gameMode;
+        private AIDifficulty _aiDifficulty;
 
         public MainWindow(GameMode gameMode = GameMode.TwoPlayers, AIDifficulty aiDifficulty = AIDifficulty.Medium)
         {
             InitializeComponent();
             _gameMode = gameMode;
-            StartNewGame(aiDifficulty);
+            _aiDifficulty = aiDifficulty;
 
-            if (_gameMode == GameMode.PlayerVsAI)
-                Title += $" (против компьютера - {aiDifficulty})";
-        }
+            // Подписываемся на событие смены скина
+            SkinManager.OnSkinChanged += OnSkinChanged;
 
-        private void StartNewGame(AIDifficulty aiDifficulty = AIDifficulty.Medium)
-        {
-            _gameEngine = new GameEngine(_gameMode, aiDifficulty);
-            UpdateBoard();
-            UpdateStatus();
+            StartNewGame();
+            SoundManager.StartBackgroundMusic();
         }
 
         private void StartNewGame()
         {
-            _gameEngine = new GameEngine(_gameMode);
+            _gameEngine = new GameEngine(_gameMode, _aiDifficulty);
             UpdateBoard();
             UpdateStatus();
+            UpdateStatistics();
+            SoundManager.ResumeBackgroundMusic();
         }
 
         private void UpdateBoard()
         {
+            BoardItemsControl.ItemsSource = null;
             BoardItemsControl.ItemsSource = _gameEngine.GetBoardCells();
         }
 
@@ -47,18 +49,49 @@ namespace CheckersApp
 
             if (_gameEngine.IsGameOver)
             {
-                StatusText.Foreground = new SolidColorBrush(Colors.Gold);
+                StatusText.Foreground = Brushes.Gold;
                 StatusText.FontWeight = FontWeights.Bold;
             }
-            else if (_gameEngine.GetGameStatus().Contains("ОБЯЗАН БИТЬ"))
+            else if (_gameEngine.GetGameStatus().Contains("Обязаны бить"))
             {
-                StatusText.Foreground = new SolidColorBrush(Colors.Red);
+                StatusText.Foreground = Brushes.Red;
                 StatusText.FontWeight = FontWeights.Bold;
             }
             else
             {
-                StatusText.Foreground = new SolidColorBrush(Colors.White);
+                StatusText.Foreground = Brushes.White;
                 StatusText.FontWeight = FontWeights.Normal;
+            }
+        }
+
+        private void UpdateStatistics()
+        {
+            StatisticsText.Text = $" | Белые: {_gameEngine.WhitePieces} | Черные: {_gameEngine.BlackPieces} | Ходы: {_gameEngine.MoveCount}";
+        }
+
+        // Метод обновления скина
+        private void OnSkinChanged()
+        {
+            UpdateBoard();
+        }
+
+        private void SkinsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var skinsWindow = new SimpleSkinsWindow();
+            skinsWindow.Owner = this;
+            skinsWindow.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+
+            if (skinsWindow.ShowDialog() == true)
+            {
+                // Показываем сообщение об успехе
+                StatusText.Text = "✓ Скин изменен!";
+                StatusText.Foreground = Brushes.LightGreen;
+
+                // Через 2 секунды возвращаем статус
+                Task.Delay(2000).ContinueWith(_ =>
+                {
+                    Dispatcher.Invoke(() => UpdateStatus());
+                });
             }
         }
 
@@ -72,16 +105,11 @@ namespace CheckersApp
                 _gameEngine.HandleCellClick(cell.Row, cell.Column);
                 UpdateBoard();
                 UpdateStatus();
+                UpdateStatistics();
 
                 if (_gameEngine.IsGameOver)
                 {
-                    MessageBox.Show(
-                        $"Игра окончена!\n{_gameEngine.GetGameStatus()}",
-                        "Поздравляем!",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information
-                    );
-                    StartNewGame();
+                    await ShowGameOverMessage();
                 }
                 else if (_gameMode == GameMode.PlayerVsAI && _gameEngine.CurrentPlayer == PieceColor.Black)
                 {
@@ -96,17 +124,26 @@ namespace CheckersApp
             _gameEngine.MakeAIMove();
             UpdateBoard();
             UpdateStatus();
+            UpdateStatistics();
 
             if (_gameEngine.IsGameOver)
             {
-                MessageBox.Show(
-                    $"Игра окончена!\n{_gameEngine.GetGameStatus()}",
-                    "Поздравляем!",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information
-                );
-                StartNewGame();
+                ShowGameOverMessage();
             }
+        }
+
+        private async Task ShowGameOverMessage()
+        {
+            await Task.Delay(1000);
+
+            MessageBox.Show(
+                $"Игра окончена!\n{_gameEngine.GetGameStatus()}",
+                "Поздравляем!",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information
+            );
+
+            StartNewGame();
         }
 
         private void RestartButton_Click(object sender, RoutedEventArgs e)
@@ -131,44 +168,41 @@ namespace CheckersApp
 
             if (bestMove != null)
             {
-                // Показываем подсказку ИИ
-                _gameEngine.ShowBestMoveHint(bestMove);
+                _gameEngine.ClearHints();
+
+                var cells = _gameEngine.GetBoardCells().ToList();
+
+                var fromCell = cells.FirstOrDefault(c =>
+                    c.Row == bestMove.From.Row && c.Column == bestMove.From.Column);
+
+                var toCell = cells.FirstOrDefault(c =>
+                    c.Row == bestMove.To.Row && c.Column == bestMove.To.Column);
+
+                if (fromCell != null)
+                {
+                    fromCell.IsSelected = true;
+                }
+
+                if (toCell != null)
+                {
+                    toCell.IsPossibleMove = true;
+                }
+
                 UpdateBoard();
 
-                // Временно меняем статус на подсказку
                 string originalStatus = StatusText.Text;
-                StatusText.Text = $"Совет: {GetMoveDescription(bestMove)}";
-                StatusText.Foreground = new SolidColorBrush(Color.FromRgb(156, 39, 176));
+                string fromPos = $"{(char)('A' + bestMove.From.Column)}{8 - bestMove.From.Row}";
+                string toPos = $"{(char)('A' + bestMove.To.Column)}{8 - bestMove.To.Row}";
 
-                // Ждем 5 секунд и убираем подсказку
-                await Task.Delay(5000);
+                StatusText.Text = $"Подсказка: {fromPos} → {toPos}";
+                StatusText.Foreground = Brushes.LightGreen;
+
+                await Task.Delay(3000);
 
                 _gameEngine.ClearHints();
                 UpdateBoard();
                 StatusText.Text = originalStatus;
-                StatusText.Foreground = new SolidColorBrush(Colors.White);
-            }
-            else
-            {
-                StatusText.Text = "Нет возможных ходов";
-                StatusText.Foreground = new SolidColorBrush(Colors.Red);
-                await Task.Delay(2000);
                 UpdateStatus();
-            }
-        }
-
-        private string GetMoveDescription(Move move)
-        {
-            string from = $"{(char)('A' + move.From.Column)}{8 - move.From.Row}";
-            string to = $"{(char)('A' + move.To.Column)}{8 - move.To.Row}";
-
-            if (move.IsCapture)
-            {
-                return $"Взять с {from} на {to}";
-            }
-            else
-            {
-                return $"Сходить с {from} на {to}";
             }
         }
 
@@ -176,31 +210,39 @@ namespace CheckersApp
         {
             if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
-                UndoLastMove();
-                e.Handled = true;
+                MessageBox.Show("Отмена хода в разработке",
+                    "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else if (e.Key == Key.H)
+            {
+                HintButton_Click(null, null);
+            }
+            else if (e.Key == Key.F5)
+            {
+                RestartButton_Click(null, null);
+            }
+            else if (e.Key == Key.Escape)
+            {
+                BackToMenuButton_Click(null, null);
             }
             base.OnKeyDown(e);
         }
 
-        private void UndoLastMove()
+        private void SoundToggleButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_gameEngine.UndoMove())
+            SoundManager.ToggleSounds();
+            var button = sender as Button;
+            if (button != null)
             {
-                UpdateBoard();
-                UpdateStatus();
+                button.Content = SoundManager.SoundsEnabled ? "🔊 Звуки" : "🔇 Звуки";
+            }
+        }
 
-                if (_gameMode == GameMode.PlayerVsAI && _gameEngine.CurrentPlayer == PieceColor.White)
-                {
-                    _gameEngine.UndoMove();
-                    UpdateBoard();
-                    UpdateStatus();
-                }
-            }
-            else
-            {
-                MessageBox.Show("Нельзя отменить ход", "Информация",
-                               MessageBoxButton.OK, MessageBoxImage.Information);
-            }
+        protected override void OnClosed(EventArgs e)
+        {
+            SoundManager.StopBackgroundMusic();
+            SkinManager.OnSkinChanged -= OnSkinChanged;
+            base.OnClosed(e);
         }
     }
 }

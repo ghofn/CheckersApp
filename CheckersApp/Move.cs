@@ -13,6 +13,19 @@
             To = to;
             IsCapture = false;
         }
+
+        public Move(Position from, Position to, Position capturedPiece)
+        {
+            From = from;
+            To = to;
+            IsCapture = true;
+            CapturedPiece = capturedPiece;
+        }
+
+        public override string ToString()
+        {
+            return $"Move: ({From.Row},{From.Column}) -> ({To.Row},{To.Column})";
+        }
     }
 
     public class Position
@@ -32,15 +45,10 @@
         White,
         Black
     }
+
     public enum GameMode
     {
         TwoPlayers,
         PlayerVsAI
-    }
-    public enum AIDifficulty
-    {
-        Easy,
-        Medium,
-        Hard
     }
 }

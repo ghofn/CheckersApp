@@ -1,19 +1,18 @@
 ﻿using System;
 using System.Globalization;
 using System.Windows.Data;
-using System.Windows.Media;
 
 namespace CheckersApp
 {
-    public class ColorToBrushConverter : IValueConverter
+    public class SkinKingSymbolConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is Color color)
+            if (value is BoardCell cell)
             {
-                return new SolidColorBrush(color);
+                return cell.GetKingSymbol();
             }
-            return Brushes.Transparent;
+            return "♕";
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
