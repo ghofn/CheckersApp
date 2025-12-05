@@ -7,7 +7,8 @@
         Width="850"
         WindowStartupLocation="CenterScreen"
         Background="#1e1e1e"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        Icon="/Properties/dima.jpg">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>

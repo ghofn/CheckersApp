@@ -7,7 +7,8 @@
         Width="900"
         WindowStartupLocation="CenterScreen"
         Background="#1e1e1e"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        Icon="/Properties/Дмитрий_Солдатов.jpg">
 
     <Window.Resources>
         <Style x:Key="MenuButton" TargetType="Button">
