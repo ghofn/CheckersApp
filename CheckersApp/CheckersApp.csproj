@@ -55,6 +55,13 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="KingVisibilityConverter.cs" />
+    <Compile Include="PieceSkin.cs" />
+    <Compile Include="SimpleSkinsWindow.xaml.cs">
+      <DependentUpon>SimpleSkinsWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="SkinColorConverter.cs" />
+    <Compile Include="SkinKingSymbolConverter.cs" />
     <Compile Include="SoundManager.cs" />
     <Page Include="MainMenuWindow.xaml">
       <SubType>Designer</SubType>
@@ -80,6 +87,10 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="SimpleSkinsWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Move.cs" />
@@ -109,13 +120,16 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
+    <Resource Include="Properties\Дмитрий_Солдатов.jpg" />
+    <Resource Include="Properties\dima.jpg" />
+    <Resource Include="Properties\dimaskin.jpeg" />
+    <Content Include="Sounds\black_victory.wav">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Sounds\capture.wav">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Sounds\move.wav">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Sounds\victory.wav">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
